@@ -9,7 +9,7 @@ function App() {
   const [isGameStarted, setIsGameStarted] = useState(false);
   return (
     <>
-      {isGameStarted ?<GamePage/> : <LandingPage onCLick={() => setIsGameStarted(true)}/> }
+      {isGameStarted ? <GamePage onReturnClick={() => setIsGameStarted(false)} /> : <LandingPage onCLick={() => setIsGameStarted(true)}/> }
     </>
   )
 }
