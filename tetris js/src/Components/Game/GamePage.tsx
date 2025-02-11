@@ -1,36 +1,45 @@
 import { FC, JSX, useEffect, useRef, useState } from "react";
 
-const isInNumberRange = (rangeStart: number, rangeEnd: number, number: number) => {
-    for(let curr = rangeStart; curr < rangeEnd; curr++){
-        if(number === curr){
-            return true;
-        }
-    }
-    return false;
+const blockShapes = [
+    [{column: 0, row: 0}, {column: 1, row: 0}, {column: 1, row: 1}, {column: 2, row: 1}],
+    [{column: 0, row: 0}, {column: 1, row: 0}],
+    [{column: 0, row: 0}, {column: 0, row: 1}, {column: 0, row: 2}, {column: 0, row: 3}],
+    [{column: 0, row: 0}, {column: 0, row: 1}, {column: 0, row: 2}, {column: 0, row: 3},{column: 1, row: 3},{column: 2, row: 3},{column: 3, row: 3}]
+];
+
+const getRandomShape = () => {
+    return blockShapes[Math.ceil(Math.random() * 3)];
 }
 
 const GamePage: FC<{ onReturnClick: () => void}> = ({ onReturnClick}) => { 
     const [gaming, setGaming] = useState(false);
-    const [blockPosition, setBlockPosition] = useState<{movingBlock: { column: number; row: number; width: number; height: number}; finishedBlocks:  { column: number; row: number}[]}>({movingBlock: { column: 0, row: 0, width: Math.ceil((Math.random() * 4)), height: 1}, finishedBlocks: []});
+    const [blockPosition, setBlockPosition] = useState<{movingBlock: { column: number; row: number}[]; finishedBlocks:  { column: number; row: number}[]}>({movingBlock: getRandomShape(), finishedBlocks: []});
     const [gameOver, setGameOver] = useState(false);
-    const dropSpeedRef = useRef(200);
+    const dropSpeedRef = useRef(300);
     const oneGridBlockProportions = '40px'
     const gameWidth: number = 17;
     const gameHeight = 22;
     const rowToRemove = useRef<number>(null);
 
     const createGameField = () => {
-        const playGround: JSX.Element[][] = []
+        const playGround: JSX.Element[][] = [];
         for(let i = 0; i < gameHeight; i++){
-            const row = [];           
+            const row = [];
+            let blocksInRow = 0           
             for(let x = 0; x < gameWidth; x++){
-                const isVisibleBlock = blockPosition.movingBlock.column === x && blockPosition.movingBlock.row === i;
-                const isPartOfBlock = blockPosition.movingBlock.width > 1 ? ((isInNumberRange(blockPosition.movingBlock.column, blockPosition.movingBlock.column + blockPosition.movingBlock.width, x) && blockPosition.movingBlock.row === i)) : false
+                const isVisibleBlock = blockPosition.movingBlock.find(b => b.column === x && b.row === i);
                 const isFinishedBlock = blockPosition.finishedBlocks.find(block => block.column === x && block.row === i);
-                const block = <div key={`${x} && ${i}`} style={{ width: oneGridBlockProportions, height: oneGridBlockProportions, border: '1px solid', backgroundColor: isVisibleBlock || isFinishedBlock || isPartOfBlock ? 'black' : 'transparent' }}>{i}-{x}</div>
+                if(isFinishedBlock || isFinishedBlock){
+                    blocksInRow++
+                }
+                const block = <div key={`${x} && ${i}`} style={{ width: oneGridBlockProportions, height: oneGridBlockProportions, border: '1px solid', backgroundColor: isVisibleBlock || isFinishedBlock ? 'black' : 'transparent' }}>{i}-{x}</div>
                 row.push(block);
             }
             playGround.push([<div key={`${i}`} style={{ display: 'flex'}}>{row}</div>]);
+            if(blocksInRow === gameWidth){
+                rowToRemove.current = i;
+            }
+            blocksInRow = 0;
         }
         return playGround;
     }
@@ -44,10 +53,18 @@ const GamePage: FC<{ onReturnClick: () => void}> = ({ onReturnClick}) => {
 
     const handleArrowKeyDown = (e: KeyboardEvent) => {
         if(e.code === 'ArrowLeft'){
-            setBlockPosition(prev => ({...prev, movingBlock: {...prev.movingBlock, column: prev.movingBlock.column ? prev.movingBlock.column - 1 : 0}}));
+            setBlockPosition(prev => {
+                const prevPosition = prev.movingBlock;
+                const movedPosition = prevPosition.map(pos => ({...pos, column: pos.column  - 1}));
+                return {...prev, movingBlock: movedPosition};
+            });
         }
         if(e.code === 'ArrowRight'){
-            setBlockPosition(prev => ({ ...prev, movingBlock: {...prev.movingBlock, column: prev.movingBlock.column === gameWidth - 1 ? prev.movingBlock.column : prev.movingBlock.column + 1} }));
+            setBlockPosition(prev => {
+                const prevPosition  = prev.movingBlock;
+                const movedPosition = prevPosition.map(pos => ({...pos, column: pos.column + 1}));
+                return {...prev, movingBlock: movedPosition};
+            })
         }
         if(e.code === 'Space'){
             e.preventDefault();
@@ -71,24 +88,17 @@ const GamePage: FC<{ onReturnClick: () => void}> = ({ onReturnClick}) => {
         }
 
         const blockMovingInterval = setInterval(() => {
-            setBlockPosition(prev => {    
-                if(prev.movingBlock.row === gameHeight - 1 || prev.finishedBlocks.find(b => b.row === prev.movingBlock.row + 1 && isInNumberRange(prev.movingBlock.column, prev.movingBlock.column + prev.movingBlock.width, b.column))){
+         
+            setBlockPosition(prev => {
+                if(prev.movingBlock.some(pos => pos.row === gameHeight - 1) || prev.finishedBlocks.find(pos =>  prev.movingBlock.some(p => pos.row === p.row + 1 && p.column === pos.column))){
                     const finishedBlocks = [...prev.finishedBlocks];
-                    const currentRow = prev.movingBlock.row
-                    const range = prev.movingBlock.column + prev.movingBlock.width;
-                    for(let blockPart = prev.movingBlock.column; blockPart < range; blockPart++){
-                        finishedBlocks.push({ row: blockPosition.movingBlock.row, column: blockPart});
-                    }
-                    const actuallRowBlockNumber = finishedBlocks.filter(b => b.row === prev.movingBlock.row).length;
-
-                    if(actuallRowBlockNumber === gameWidth){
-                        rowToRemove.current = currentRow; 
-                    }
-                    return {finishedBlocks, movingBlock: {column: 0, row: 0, height: 1, width: Math.ceil((Math.random() * 4))}};
+                    finishedBlocks.push(...prev.movingBlock);
+                    return { movingBlock: getRandomShape(), finishedBlocks};
                 } else {
-                    return {...prev, movingBlock: {...prev.movingBlock, row: prev.movingBlock.row + 1}};
+                    const movingBlockPosititon = prev.movingBlock.map(pos => ({...pos, row: pos.row + 1}));
+                    return { ...prev, movingBlock: movingBlockPosititon};
                 }
-            });
+            })
             if(rowToRemove.current){
                 const removedRow: number = rowToRemove.current;
                 setBlockPosition(prev => {
@@ -103,7 +113,7 @@ const GamePage: FC<{ onReturnClick: () => void}> = ({ onReturnClick}) => {
     });
 
     const startNewGame = () => {
-        setBlockPosition({movingBlock: { column: 0, row: 0, height: 0, width: Math.ceil((Math.random() * 4))}, finishedBlocks: []});
+        setBlockPosition({movingBlock: [{ column: 0, row: 0}], finishedBlocks: []});
         setGameOver(false);
     }
 
